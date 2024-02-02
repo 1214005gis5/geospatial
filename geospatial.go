@@ -1,275 +1,189 @@
 package geospatial
 
 import (
-	"context"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"time"
+	"encoding/json"
+	"net/http"
 )
 
-func GeoIntersectQuery(client *mongo.Database, polygon [][][]float64) ([]LocationData, error) {
-	collection := client.Collection("location")
-
-	filter := bson.M{
-		"border": bson.M{
-			"$geoIntersects": bson.M{
-				"$geometry": bson.M{
-					"type":        "Polygon",
-					"coordinates": polygon,
-				},
-			},
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cursor, err := collection.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
-	}
-
-	return results, nil
+func ReturnStruct(DataStuct any) string {
+	jsondata, _ := json.Marshal(DataStuct)
+	return string(jsondata)
 }
 
-func GeoWithinQuery(client *mongo.Database, polygon [][][]float64) ([]LocationData, error) {
-	collection := client.Collection("location")
-	filter := bson.M{
-		"border": bson.M{
-			"$geoWithin": bson.M{
-				"$geometry": bson.M{
-					"type":        "Polygon",
-					"coordinates": polygon,
-				},
-			},
-		},
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+// ---------------------------------------------------------------------- Geojson ----------------------------------------------------------------------
 
-	cursor, err := collection.Find(ctx, filter)
+func MembuatGeojsonPoint(mongoenv, dbname, collname string, r *http.Request) string {
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection(mongoenv, dbname)
+	var geojsonpoint GeoJsonPoint
+	err := json.NewDecoder(r.Body).Decode(&geojsonpoint)
+
 	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
 	}
 
-	return results, nil
+	PostPoint(mconn, collname, geojsonpoint)
+	response.Status = true
+	response.Message = "Data point berhasil masuk"
+
+	return ReturnStruct(response)
 }
 
-func GeoNearQuery(client *mongo.Database, polygon [][][]float64, maxDistance int) ([]LocationData, error) {
-	collection := client.Collection("location")
-	filter := bson.M{
-		"border": bson.M{
-			"$near": bson.M{
-				"$geometry": bson.M{
-					"type":        "Polygon",
-					"coordinates": polygon,
-				},
-				"$maxDistance": maxDistance,
-			},
-		},
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func MembuatGeojsonPolyline(mongoenv, dbname, collname string, r *http.Request) string {
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection(mongoenv, dbname)
+	var geojsonpolyline GeoJsonLineString
+	err := json.NewDecoder(r.Body).Decode(&geojsonpolyline)
 
-	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
 	}
 
-	return results, nil
+	PostLinestring(mconn, collname, geojsonpolyline)
+	response.Status = true
+	response.Message = "Data polyline berhasil masuk"
+
+	return ReturnStruct(response)
 }
 
-func GeoNearSphereQuery(client *mongo.Database, polygon []float64, radius int) ([]LocationData, error) {
-	collection := client.Collection("location")
-	filter := bson.M{
-		"border": bson.M{
-			"$nearSphere": bson.M{
-				"$geometry": bson.M{
-					"type":        "Point",
-					"coordinates": polygon,
-				},
-				"$maxDistance": radius,
-			},
-		},
-	}
+func MembuatGeojsonPolygon(mongoenv, dbname, collname string, r *http.Request) string {
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection(mongoenv, dbname)
+	var geojsonpolygon GeoJsonPolygon
+	err := json.NewDecoder(r.Body).Decode(&geojsonpolygon)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
 	}
 
-	return results, nil
+	PostPolygon(mconn, collname, geojsonpolygon)
+	response.Status = true
+	response.Message = "Data polygon berhasil masuk"
+
+	return ReturnStruct(response)
 }
 
-func GeoBoxQuery(client *mongo.Database, lowerLeft, upperRight []float64) ([]LocationData, error) {
-	collection := client.Collection("location")
-	filter := bson.M{
-		"border": bson.M{
-			"$geoWithin": bson.M{
-				"$geometry": bson.M{
-					"type": "Polygon",
-					"coordinates": [][]float64{
-						{lowerLeft[0], lowerLeft[1]},
-						{upperRight[0], lowerLeft[1]},
-						{upperRight[0], upperRight[1]},
-						{lowerLeft[0], upperRight[1]},
-						{lowerLeft[0], lowerLeft[1]},
-					},
-				},
-			},
-		},
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cursor, err := collection.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
-	}
-
-	return results, nil
+func AmbilDataGeojson(mongoenv, dbname, collname string, r *http.Request) string {
+	mconn := SetConnection(mongoenv, dbname)
+	datagedung := GetAllBangunan(mconn, collname)
+	return ReturnStruct(datagedung)
 }
 
-func GeoCenterQuery(client *mongo.Database, center []float64, radius int) ([]LocationData, error) {
-	collection := client.Collection("location")
+func PostGeoIntersects(mongoenv, dbname, collname string, r *http.Request) string {
+	var coordinate Point
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection(mongoenv, dbname)
 
-	filter := bson.M{
-		"border": bson.M{
-			"$geoWithin": bson.M{
-				"$centerSphere": []interface{}{center, float64(radius) / 6371000},
-			},
-		},
-	}
+	err := json.NewDecoder(r.Body).Decode(&coordinate)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
 	}
 
-	return results, nil
+	response.Status = true
+	response.Message = GeoIntersects(mconn, collname, coordinate)
+	return ReturnStruct(response)
 }
 
-func GeoGeometryQuery(client *mongo.Database, geometry bson.M) ([]LocationData, error) {
-	// Actual implementation of the function
-	collection := client.Collection("location")
-	filter := bson.M{
-		"border": bson.M{
-			"$near": bson.M{
-				"$geometry": geometry,
-			},
-		},
-	}
+func PostGeoWithin(mongoenv, dbname, collname string, r *http.Request) string {
+	var coordinate Polygon
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection(mongoenv, dbname)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	err := json.NewDecoder(r.Body).Decode(&coordinate)
 
-	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
 	}
 
-	return results, nil
-}
-func GeoMaxDistanceQuery(client *mongo.Database, point []float64, maxDistance int) ([]LocationData, error) {
-	collection := client.Collection("location")
-	filter := bson.M{
-		"border": bson.M{
-			"$near": bson.M{
-				"$geometry":    bson.M{"type": "Point", "coordinates": point},
-				"$maxDistance": maxDistance,
-			},
-		},
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	response.Status = true
+	response.Message = GeoWithin(mconn, collname, coordinate)
 
-	cursor, err := collection.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
-	}
-
-	return results, nil
+	return ReturnStruct(response)
 }
 
-func GeoMinDistanceQuery(client *mongo.Database, point []float64, minDistance int) ([]LocationData, error) {
-	collection := client.Collection("location")
+func PostNear(mongoenv, dbname, collname string, r *http.Request) string {
+	var coordinate Point
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection2dsphere(mongoenv, dbname, collname)
 
-	filter := bson.M{
-		"border": bson.M{
-			"$near": bson.M{
-				"$geometry":    bson.M{"type": "Point", "coordinates": point},
-				"$minDistance": minDistance,
-			},
-		},
-	}
+	err := json.NewDecoder(r.Body).Decode(&coordinate)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []LocationData
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
 	}
 
-	return results, nil
+	response.Status = true
+	response.Message = Near(mconn, collname, coordinate)
+
+	return ReturnStruct(response)
+}
+
+func PostNearSphere(mongoenv, dbname, collname string, r *http.Request) string {
+	var coordinate Point
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection2dsphere(mongoenv, dbname, collname)
+
+	err := json.NewDecoder(r.Body).Decode(&coordinate)
+
+	if err != nil {
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
+	}
+
+	response.Status = true
+	response.Message = NearSphere(mconn, collname, coordinate)
+
+	return ReturnStruct(response)
+}
+
+func PostBox(mongoenv, dbname, collname string, r *http.Request) string {
+	var coordinate Polyline
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection2dsphere(mongoenv, dbname, collname)
+
+	err := json.NewDecoder(r.Body).Decode(&coordinate)
+
+	if err != nil {
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
+	}
+
+	response.Status = true
+	response.Message = Box(mconn, collname, coordinate)
+
+	return ReturnStruct(response)
+}
+
+func PostCenter(mongoenv, dbname, collname string, r *http.Request) string {
+	var coordinate Point
+	var response Pesan
+	response.Status = false
+	mconn := SetConnection2dsphere(mongoenv, dbname, collname)
+
+	err := json.NewDecoder(r.Body).Decode(&coordinate)
+
+	if err != nil {
+		response.Message = "Error parsing application/json: " + err.Error()
+		return ReturnStruct(response)
+	}
+
+	response.Status = true
+	response.Message = Center(mconn, collname, coordinate)
+
+	return ReturnStruct(response)
 }
