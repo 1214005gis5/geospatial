@@ -13,9 +13,15 @@ var collname = "pointmap"
 
 func TestGeoIntersects(t *testing.T) {
 	mconn := SetConnection("mongoenv", dbname)
-	coordinates := Point{
-		Coordinates: []float64{
-			103.60768133536988, -1.628526295003084,
+	coordinates := Polygon{
+		Coordinates: [][][]float64{
+			{
+				{106.82320902216969, -6.180906971485783},
+				{106.82333238308496, -6.183145216209596},
+				{106.83304705518373, -6.1825013385601295},
+				{106.83212184831717, -6.180447057013481},
+				{106.82320902216969, -6.180906971485783},
+			},
 		},
 	}
 	datagedung := GeoIntersects(mconn, collname, coordinates)
